@@ -26,9 +26,13 @@ import (
 const usage = `otp-migrate — decode Google Authenticator migration QR/URL.
 
 Usage:
-  otp-migrate qr  <image>          decode a QR image file (PNG or JPEG)
-  otp-migrate url <uri>            decode an otpauth-migration:// URI directly
+  otp-migrate qr  <image>...       decode one or more QR image files (PNG or JPEG)
+  otp-migrate url <uri>...         decode one or more otpauth-migration:// URIs
   otp-migrate -h | --help
+
+Multiple inputs are merged as a multi-QR export (Google Authenticator splits
+exports with >10 accounts across several QR codes). All inputs must belong to
+the same export (matching batch_id) and together cover every batch_index.
 
 Options:
   --json        emit accounts as a JSON array (machine readable)
@@ -37,9 +41,17 @@ Options:
 
 Examples:
   otp-migrate qr ./examples/demo-qr.png
-  otp-migrate qr ./export.png --totp
+  otp-migrate qr ./export-1.png ./export-2.png ./export-3.png --totp
   otp-migrate url 'otpauth-migration://offline?data=...' --json
 `
+
+// Set by goreleaser at link time via -ldflags. Defaults are useful for `go run`
+// or a plain `go build` from a checkout.
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
@@ -51,6 +63,10 @@ func main() {
 func run(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
 		fmt.Fprint(stdout, usage)
+		return nil
+	}
+	if args[0] == "version" || args[0] == "--version" || args[0] == "-v" {
+		fmt.Fprintf(stdout, "otp-migrate %s (commit %s, built %s)\n", version, commit, date)
 		return nil
 	}
 
@@ -74,19 +90,23 @@ func run(args []string, stdout, stderr io.Writer) error {
 	)
 	switch sub {
 	case "qr":
-		if len(positional) != 1 {
-			return errors.New("`qr` requires exactly one argument: <image>")
+		if len(positional) == 0 {
+			return errors.New("`qr` requires at least one image argument")
 		}
-		text, qErr := qr.DecodeFile(positional[0])
-		if qErr != nil {
-			return qErr
+		uris := make([]string, 0, len(positional))
+		for _, path := range positional {
+			text, qErr := qr.DecodeFile(path)
+			if qErr != nil {
+				return fmt.Errorf("%s: %w", path, qErr)
+			}
+			uris = append(uris, text)
 		}
-		accounts, err = migration.DecodeURL(text)
+		accounts, err = migration.DecodeURLs(uris)
 	case "url":
-		if len(positional) != 1 {
-			return errors.New("`url` requires exactly one argument: <uri>")
+		if len(positional) == 0 {
+			return errors.New("`url` requires at least one URI argument")
 		}
-		accounts, err = migration.DecodeURL(positional[0])
+		accounts, err = migration.DecodeURLs(positional)
 	default:
 		return fmt.Errorf("unknown subcommand %q (try `-h`)", sub)
 	}

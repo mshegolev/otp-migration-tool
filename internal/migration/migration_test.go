@@ -3,6 +3,8 @@ package migration
 import (
 	"encoding/base32"
 	"encoding/base64"
+	"errors"
+	"fmt"
 	"net/url"
 	"strings"
 	"testing"
@@ -97,6 +99,102 @@ func TestOTPAuthURL_StructureForTOTP(t *testing.T) {
 	}
 	if strings.Contains(got, "counter=") {
 		t.Errorf("TOTP URL must not have a counter: %q", got)
+	}
+}
+
+// buildMultiFixture builds N URIs that together form one logical export
+// (matching batch_id, batch_size=N, each carrying a single named account).
+func buildMultiFixture(t *testing.T, n int, batchID int32) []string {
+	t.Helper()
+	secret, _ := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString("JBSWY3DPEHPK3PXP")
+	uris := make([]string, 0, n)
+	for i := 0; i < n; i++ {
+		p := &pb.MigrationPayload{
+			Version:    1,
+			BatchSize:  int32(n),
+			BatchIndex: int32(i),
+			BatchId:    batchID,
+			OtpParameters: []*pb.OtpParameters{
+				{
+					Secret: secret,
+					Name:   fmt.Sprintf("user-%d", i),
+					Issuer: "Acme",
+				},
+			},
+		}
+		raw, err := proto.Marshal(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		uris = append(uris, "otpauth-migration://offline?data="+url.QueryEscape(base64.StdEncoding.EncodeToString(raw)))
+	}
+	return uris
+}
+
+func TestDecodeURLs_MergesMultiQR(t *testing.T) {
+	uris := buildMultiFixture(t, 3, 42)
+	// Shuffle order; merge must restore by batch_index.
+	uris[0], uris[2] = uris[2], uris[0]
+
+	accounts, err := DecodeURLs(uris)
+	if err != nil {
+		t.Fatalf("DecodeURLs: %v", err)
+	}
+	if len(accounts) != 3 {
+		t.Fatalf("got %d accounts, want 3", len(accounts))
+	}
+	for i, a := range accounts {
+		want := fmt.Sprintf("user-%d", i)
+		if a.Name != want {
+			t.Errorf("order broken at #%d: got %q, want %q", i, a.Name, want)
+		}
+	}
+}
+
+func TestDecodeURLs_RejectsMismatchedBatchID(t *testing.T) {
+	a := buildMultiFixture(t, 2, 1)
+	b := buildMultiFixture(t, 2, 99)
+	mixed := []string{a[0], b[1]}
+	_, err := DecodeURLs(mixed)
+	if !errors.Is(err, ErrBatchMismatch) {
+		t.Errorf("got %v, want ErrBatchMismatch", err)
+	}
+}
+
+func TestDecodeURLs_RejectsMissingBatchIndex(t *testing.T) {
+	uris := buildMultiFixture(t, 3, 5)
+	// Pass only 2 of 3 → batch_size mismatch.
+	_, err := DecodeURLs(uris[:2])
+	if !errors.Is(err, ErrBatchMismatch) {
+		t.Errorf("got %v, want ErrBatchMismatch", err)
+	}
+}
+
+func TestDecodeURLs_RejectsDuplicateIndex(t *testing.T) {
+	uris := buildMultiFixture(t, 3, 5)
+	// Replace index 2 with another copy of index 0 → duplicate.
+	uris[2] = uris[0]
+	_, err := DecodeURLs(uris)
+	if !errors.Is(err, ErrBatchIncomplete) {
+		t.Errorf("got %v, want ErrBatchIncomplete", err)
+	}
+}
+
+func TestDecodeURLs_SingleQRWorks(t *testing.T) {
+	uri := buildFixture(t)
+	got, err := DecodeURLs([]string{uri})
+	if err != nil {
+		t.Fatalf("DecodeURLs: %v", err)
+	}
+	if len(got) != 1 {
+		t.Errorf("expected 1 account, got %d", len(got))
+	}
+}
+
+func TestDecodeURLs_EmptyInput(t *testing.T) {
+	_, err := DecodeURLs(nil)
+	if !errors.Is(err, ErrEmptyInput) {
+		t.Errorf("got %v, want ErrEmptyInput", err)
 	}
 }
 

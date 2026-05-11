@@ -4,7 +4,6 @@ run:
   timeout: 5m
 
 linters:
-  default: standard
   enable:
     - errcheck
     - gofmt
@@ -16,5 +15,5 @@ linters:
     - unused
   exclusions:
     paths:
-      - internal/migration/pb         # generated protobuf code
+      - internal/migration/pb
       - examples

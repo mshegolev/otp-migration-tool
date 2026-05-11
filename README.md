@@ -23,6 +23,12 @@ secrets offline.
 
 ## Install
 
+### Pre-built binaries
+
+Each tagged release publishes static binaries for Linux, macOS, and Windows
+(amd64 + arm64) on the [releases page](https://github.com/mshegolev/otp-migration-tool/releases).
+Download the archive for your platform, extract, and run.
+
 ### From source
 
 ```bash
@@ -41,14 +47,28 @@ go build ./cmd/otp-migrate
 ## Usage
 
 ```text
-otp-migrate qr  <image>          decode a QR image file (PNG or JPEG)
-otp-migrate url <uri>            decode an otpauth-migration:// URI directly
+otp-migrate qr  <image>...       decode one or more QR images (PNG or JPEG)
+otp-migrate url <uri>...         decode one or more otpauth-migration:// URIs
 
 Options:
   --json        emit accounts as a JSON array (machine readable)
   --totp        also print the current TOTP code for every TOTP account
   --reveal      include the base32 secret in plain-text output (default: redacted)
 ```
+
+### Multiple QR codes from one export
+
+If you have more than ~10 accounts, Google Authenticator splits the export
+into several QR codes. Pass all of them at once and they will be merged into
+a single account list:
+
+```bash
+otp-migrate qr export-1.png export-2.png export-3.png --totp
+```
+
+Inputs may be passed in any order. They must share the same `batch_id` and
+together cover every `batch_index` of the export — `otp-migrate` exits with
+an explanatory error otherwise.
 
 ### Decode a QR image
 

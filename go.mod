@@ -1,6 +1,6 @@
 module github.com/mshegolev/otp-migration-tool
 
-go 1.26.1
+go 1.23
 
 require (
 	github.com/makiuchi-d/gozxing v0.1.1

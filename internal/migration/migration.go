@@ -21,9 +21,12 @@ const (
 )
 
 var (
-	ErrWrongScheme  = errors.New("not an otpauth-migration:// URI")
-	ErrMissingData  = errors.New("missing required `data` query parameter")
-	ErrInvalidProto = errors.New("payload is not a valid MigrationPayload")
+	ErrWrongScheme    = errors.New("not an otpauth-migration:// URI")
+	ErrMissingData    = errors.New("missing required `data` query parameter")
+	ErrInvalidProto   = errors.New("payload is not a valid MigrationPayload")
+	ErrEmptyInput     = errors.New("no payloads provided")
+	ErrBatchMismatch  = errors.New("batch metadata mismatch across payloads (different exports?)")
+	ErrBatchIncomplete = errors.New("incomplete batch: missing or duplicate batch_index")
 )
 
 // Account is the decoded, user-facing form of one OTP entry.
@@ -61,8 +64,95 @@ func (a Account) OTPAuthURL() string {
 	return fmt.Sprintf("otpauth://%s/%s?%s", strings.ToLower(a.Type), label, q.Encode())
 }
 
-// DecodeURL parses an otpauth-migration:// URI and returns the contained accounts.
+// DecodeURL parses one otpauth-migration:// URI and returns the contained accounts.
+// For exports split across multiple QR codes, use DecodeURLs instead.
 func DecodeURL(raw string) ([]Account, error) {
+	payload, err := parseURI(raw)
+	if err != nil {
+		return nil, err
+	}
+	return paramsToAccounts(payload.OtpParameters), nil
+}
+
+// DecodeURLs accepts the URIs from every QR of a multi-QR Google Authenticator
+// export, validates their batch metadata, and returns the merged accounts in
+// the original batch order. A single URI is handled as the degenerate case.
+func DecodeURLs(raws []string) ([]Account, error) {
+	if len(raws) == 0 {
+		return nil, ErrEmptyInput
+	}
+	payloads := make([]*pb.MigrationPayload, 0, len(raws))
+	for i, r := range raws {
+		p, err := parseURI(r)
+		if err != nil {
+			return nil, fmt.Errorf("payload #%d: %w", i+1, err)
+		}
+		payloads = append(payloads, p)
+	}
+	return MergePayloads(payloads)
+}
+
+// DecodePayload parses one base64-encoded protobuf payload (the value of the
+// `data` query parameter) and returns the contained accounts.
+func DecodePayload(b64Data string) ([]Account, error) {
+	payload, err := unmarshalPayload(b64Data)
+	if err != nil {
+		return nil, err
+	}
+	return paramsToAccounts(payload.OtpParameters), nil
+}
+
+// MergePayloads validates and concatenates payloads coming from a single
+// multi-QR export. All payloads must share the same batch_id and batch_size,
+// and together cover every batch_index in [0, batch_size) exactly once.
+func MergePayloads(payloads []*pb.MigrationPayload) ([]Account, error) {
+	if len(payloads) == 0 {
+		return nil, ErrEmptyInput
+	}
+	// Single-QR exports often have batch_size = 1 and batch_index = 0, or all
+	// zero values — both shapes work fine with the same validation rules.
+	wantID := payloads[0].GetBatchId()
+	wantSize := payloads[0].GetBatchSize()
+	if wantSize == 0 {
+		wantSize = int32(len(payloads))
+	}
+	if int(wantSize) != len(payloads) {
+		return nil, fmt.Errorf("%w: got %d payloads, batch_size=%d", ErrBatchMismatch, len(payloads), wantSize)
+	}
+
+	seen := make(map[int32]*pb.MigrationPayload, len(payloads))
+	for i, p := range payloads {
+		if p.GetBatchId() != wantID {
+			return nil, fmt.Errorf("%w: payload #%d has batch_id=%d, want %d",
+				ErrBatchMismatch, i+1, p.GetBatchId(), wantID)
+		}
+		if p.GetBatchSize() != 0 && p.GetBatchSize() != wantSize {
+			return nil, fmt.Errorf("%w: payload #%d has batch_size=%d, want %d",
+				ErrBatchMismatch, i+1, p.GetBatchSize(), wantSize)
+		}
+		idx := p.GetBatchIndex()
+		if idx < 0 || idx >= wantSize {
+			return nil, fmt.Errorf("%w: payload #%d batch_index=%d out of range [0,%d)",
+				ErrBatchIncomplete, i+1, idx, wantSize)
+		}
+		if _, dup := seen[idx]; dup {
+			return nil, fmt.Errorf("%w: duplicate batch_index=%d", ErrBatchIncomplete, idx)
+		}
+		seen[idx] = p
+	}
+
+	out := make([]Account, 0)
+	for i := int32(0); i < wantSize; i++ {
+		p, ok := seen[i]
+		if !ok {
+			return nil, fmt.Errorf("%w: missing batch_index=%d", ErrBatchIncomplete, i)
+		}
+		out = append(out, paramsToAccounts(p.OtpParameters)...)
+	}
+	return out, nil
+}
+
+func parseURI(raw string) (*pb.MigrationPayload, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil {
 		return nil, fmt.Errorf("parse URI: %w", err)
@@ -74,20 +164,17 @@ func DecodeURL(raw string) ([]Account, error) {
 	if data == "" {
 		return nil, ErrMissingData
 	}
-	return DecodePayload(data)
+	return unmarshalPayload(data)
 }
 
-// DecodePayload parses the base64-encoded protobuf payload (the value of the
-// `data` query parameter) and returns the contained accounts.
-func DecodePayload(b64Data string) ([]Account, error) {
-	// Some exports use URL-safe base64; some standard. Try both with permissive padding.
+func unmarshalPayload(b64Data string) (*pb.MigrationPayload, error) {
+	// Some exports use URL-safe base64; some standard. Try the four variants.
 	decoders := []*base64.Encoding{
 		base64.StdEncoding,
 		base64.URLEncoding,
 		base64.RawStdEncoding,
 		base64.RawURLEncoding,
 	}
-	// `data` arrives URL-encoded inside the query string but net/url already unquoted it.
 	var raw []byte
 	var lastErr error
 	for _, dec := range decoders {
@@ -104,12 +191,15 @@ func DecodePayload(b64Data string) ([]Account, error) {
 	if err := proto.Unmarshal(raw, payload); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidProto, err)
 	}
+	return payload, nil
+}
 
-	out := make([]Account, 0, len(payload.OtpParameters))
-	for _, p := range payload.OtpParameters {
+func paramsToAccounts(params []*pb.OtpParameters) []Account {
+	out := make([]Account, 0, len(params))
+	for _, p := range params {
 		out = append(out, toAccount(p))
 	}
-	return out, nil
+	return out
 }
 
 func toAccount(p *pb.OtpParameters) Account {

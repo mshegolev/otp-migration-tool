@@ -1,6 +1,6 @@
 # Build artefacts
 /otp-migrate
-/dist/
+/dist/        # goreleaser output
 *.exe
 *.test
 *.out
