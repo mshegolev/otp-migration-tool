@@ -104,13 +104,47 @@ secret keys in plain text.
 ## Usage
 
 ```text
-otp-migrate qr  <image>...       decode one or more QR images (PNG or JPEG)
-otp-migrate url <uri>...         decode one or more otpauth-migration:// URIs
+otp-migrate qr   <image>...       decode one or more QR images (PNG or JPEG)
+otp-migrate url  <uri>...         decode one or more otpauth-migration:// URIs
+otp-migrate code <input>...       print only the current 6/8-digit TOTP code
 
 Options:
-  --json        emit accounts as a JSON array (machine readable)
-  --totp        also print the current TOTP code for every TOTP account
-  --reveal      include the base32 secret in plain-text output (default: redacted)
+  --json            emit accounts as a JSON array (machine readable)
+  --totp            also print the current TOTP code for every TOTP account
+  --reveal          include the base32 secret in plain-text output (default: redacted)
+  --issuer <str>    filter accounts by issuer (case-insensitive substring)
+  --name   <str>    filter accounts by account name (case-insensitive substring)
+```
+
+### Just give me the 6-digit code
+
+If you only care about pasting the current code into another app (the classic
+"call a script, get six digits" workflow), use the `code` subcommand:
+
+```bash
+# one account in the file — no filter needed
+otp-migrate code ~/secrets/mts.png
+# 482917
+
+# many accounts — narrow with --issuer (and --name if still ambiguous)
+otp-migrate code ~/secrets/export.png --issuer MTS
+
+# straight to the macOS clipboard
+otp-migrate code ~/secrets/mts.png --issuer MTS | pbcopy
+```
+
+`code` writes a single 6/8-digit line to **stdout** and nothing else, so it
+composes cleanly in shell pipelines (`$(otp-migrate code ...)`, `| pbcopy`,
+`| xclip`, etc.). Errors go to **stderr** with exit code `1`. If your filter
+matches more than one TOTP account, the error lists the candidates so you can
+tighten it. Inputs may be either an image path or an `otpauth-migration://`
+URI — the subcommand auto-detects.
+
+A handy zsh function for a single, recurring account:
+
+```bash
+# ~/.zshrc
+mts-otp() { otp-migrate code ~/secrets/mts.png --issuer MTS "$@" ; }
 ```
 
 ### Multiple QR codes from one export
