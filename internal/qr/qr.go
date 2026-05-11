@@ -5,9 +5,11 @@ package qr
 import (
 	"fmt"
 	"image"
+	"os"
+
+	// Register JPEG and PNG decoders with image.Decode (side-effect imports).
 	_ "image/jpeg"
 	_ "image/png"
-	"os"
 
 	"github.com/makiuchi-d/gozxing"
 	"github.com/makiuchi-d/gozxing/qrcode"

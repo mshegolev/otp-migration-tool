@@ -15,17 +15,18 @@ import (
 )
 
 const (
-	scheme        = "otpauth-migration"
-	queryDataKey  = "data"
-	exportedPath  = "offline"
+	scheme       = "otpauth-migration"
+	queryDataKey = "data"
+	exportedPath = "offline"
 )
 
+// Sentinel errors returned by the decoder. Wrap with %w and check via errors.Is.
 var (
-	ErrWrongScheme    = errors.New("not an otpauth-migration:// URI")
-	ErrMissingData    = errors.New("missing required `data` query parameter")
-	ErrInvalidProto   = errors.New("payload is not a valid MigrationPayload")
-	ErrEmptyInput     = errors.New("no payloads provided")
-	ErrBatchMismatch  = errors.New("batch metadata mismatch across payloads (different exports?)")
+	ErrWrongScheme     = errors.New("not an otpauth-migration:// URI")
+	ErrMissingData     = errors.New("missing required `data` query parameter")
+	ErrInvalidProto    = errors.New("payload is not a valid MigrationPayload")
+	ErrEmptyInput      = errors.New("no payloads provided")
+	ErrBatchMismatch   = errors.New("batch metadata mismatch across payloads (different exports?)")
 	ErrBatchIncomplete = errors.New("incomplete batch: missing or duplicate batch_index")
 )
 

@@ -4,10 +4,10 @@ package totp
 
 import (
 	"crypto/hmac"
+	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
-	"crypto/md5"
 	"encoding/binary"
 	"fmt"
 	"hash"
