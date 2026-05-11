@@ -1,0 +1,23 @@
+# Build artefacts
+/otp-migrate
+/dist/
+*.exe
+*.test
+*.out
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Real OTP exports — never commit these.
+# Anything in the project root is treated as someone's actual export.
+/*.png
+/*.jpg
+/*.jpeg
+/*.url
+
+# Allow the demo files under examples/
+!examples/demo-qr.png
+!examples/demo.url
