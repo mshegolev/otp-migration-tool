@@ -6,7 +6,6 @@ run:
 linters:
   enable:
     - errcheck
-    - gofmt
     - govet
     - ineffassign
     - misspell
@@ -15,5 +14,10 @@ linters:
     - unused
   exclusions:
     paths:
-      - internal/migration/pb
+      - internal/migration/pb     # generated protobuf code
       - examples
+
+# In golangci-lint v2 "formatters" are a separate category from linters.
+formatters:
+  enable:
+    - gofmt
