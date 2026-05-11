@@ -44,6 +44,63 @@ go build ./cmd/otp-migrate
 ./otp-migrate -h
 ```
 
+## Get the QR code out of Google Authenticator
+
+`otp-migrate` does not talk to your phone — it just reads the QR image (or the
+`otpauth-migration://` URI) that Google Authenticator already shows you on the
+*Export accounts* screen. The hard part is usually getting that image onto
+your computer.
+
+### 1. Open the export screen in Authenticator
+
+1. Open **Google Authenticator** on your phone.
+2. Tap the menu (`⋮` top-right, or your account avatar) → **Transfer
+   accounts** → **Export accounts**.
+3. Authenticate (FaceID / fingerprint / PIN).
+4. Select the accounts you want to migrate → **Next**.
+5. Authenticator now shows one or more QR codes ("**1 of N**" in the top-right
+   if there is more than one). Each QR encodes an
+   `otpauth-migration://offline?data=…` URI with a chunk of your accounts.
+
+> ⚠️ **Treat that screen like a password.** Anyone who photographs it gets
+> every selected TOTP secret. Don't post it in chat, don't sync it to the
+> cloud, don't paste it into web tools.
+
+### 2. Get the QR image onto your computer
+
+**iPhone / iPad**
+1. While the QR is on screen, take a **screenshot** (Side button + Volume Up).
+2. AirDrop / email / copy the screenshot to your Mac or Linux/Windows box.
+
+**Android**
+Google Authenticator on Android marks its export screen with `FLAG_SECURE`,
+which **blocks screenshots** — you will get a black image or "Can't take
+screenshot due to security policy". Workarounds:
+
+- Easiest: use a **second device** (another phone or a webcam) to photograph
+  the QR on screen, then move the JPG/PNG to your computer.
+- Developer route: with ADB enabled,
+  `adb exec-out screencap -p > export.png` bypasses `FLAG_SECURE` on most
+  builds.
+- If you have multiple QR codes, swipe through them and capture each one in
+  turn — `otp-migrate` will merge them.
+
+### 3. Decode
+
+```bash
+# one QR
+otp-migrate qr ./export.png --totp
+
+# several QR codes from a single export (any order)
+otp-migrate qr ./export-1.png ./export-2.png ./export-3.png --totp
+
+# if you already extracted the otpauth-migration:// URI
+otp-migrate url 'otpauth-migration://offline?data=...' --reveal
+```
+
+When you are done, **delete the image files**. They are equivalent to your
+secret keys in plain text.
+
 ## Usage
 
 ```text
