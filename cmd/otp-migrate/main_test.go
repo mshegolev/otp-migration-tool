@@ -14,7 +14,7 @@ import (
 )
 
 // multiAccountURI builds an otpauth-migration:// URI with two TOTP accounts
-// (Acme:alice and MTS:mvschegole), so tests can exercise the --issuer / --name
+// (Acme:alice and Globex:bob), so tests can exercise the --issuer / --name
 // filter path that real users hit when they export many accounts at once.
 func multiAccountURI(t *testing.T) string {
 	t.Helper()
@@ -35,8 +35,8 @@ func multiAccountURI(t *testing.T) string {
 			},
 			{
 				Secret:    secret,
-				Name:      "mvschegole",
-				Issuer:    "MTS",
+				Name:      "bob",
+				Issuer:    "Globex",
 				Algorithm: pb.Algorithm_ALGORITHM_SHA1,
 				Digits:    pb.DigitCount_DIGIT_COUNT_SIX,
 				Type:      pb.OtpType_OTP_TYPE_TOTP,
@@ -55,7 +55,7 @@ var sixDigitsLine = regexp.MustCompile(`^[0-9]{6}\n$`)
 func TestCode_FiltersByIssuer(t *testing.T) {
 	uri := multiAccountURI(t)
 	var stdout, stderr bytes.Buffer
-	if err := run([]string{"code", uri, "--issuer", "MTS"}, &stdout, &stderr); err != nil {
+	if err := run([]string{"code", uri, "--issuer", "Globex"}, &stdout, &stderr); err != nil {
 		t.Fatalf("run: %v (stderr=%s)", err, stderr.String())
 	}
 	if !sixDigitsLine.MatchString(stdout.String()) {
@@ -93,7 +93,7 @@ func TestCode_FailsWhenFilterMatchesNothing(t *testing.T) {
 func TestCode_FilterIsCaseInsensitive(t *testing.T) {
 	uri := multiAccountURI(t)
 	var stdout, stderr bytes.Buffer
-	if err := run([]string{"code", uri, "--issuer", "mts", "--name", "MVSCHEGOLE"}, &stdout, &stderr); err != nil {
+	if err := run([]string{"code", uri, "--issuer", "globex", "--name", "BOB"}, &stdout, &stderr); err != nil {
 		t.Fatalf("run: %v (stderr=%s)", err, stderr.String())
 	}
 	if !sixDigitsLine.MatchString(stdout.String()) {

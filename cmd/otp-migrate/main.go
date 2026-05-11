@@ -7,7 +7,7 @@
 //	otp-migrate url     'otpauth-migration://offline?data=...'
 //	otp-migrate qr      export.png --json
 //	otp-migrate qr      export.png --totp
-//	otp-migrate code    export.png --issuer MTS
+//	otp-migrate code    export.png --issuer Acme
 package main
 
 import (
@@ -52,8 +52,8 @@ Examples:
   otp-migrate qr ./examples/demo-qr.png
   otp-migrate qr ./export-1.png ./export-2.png ./export-3.png --totp
   otp-migrate url 'otpauth-migration://offline?data=...' --json
-  otp-migrate code ~/secrets/mts.png --issuer MTS
-  otp-migrate code ~/secrets/mts.png --issuer MTS | pbcopy
+  otp-migrate code ~/secrets/auth.png --issuer Acme
+  otp-migrate code ~/secrets/auth.png --issuer Acme | pbcopy
 `
 
 // Set by goreleaser at link time via -ldflags. Defaults are useful for `go run`
@@ -290,7 +290,7 @@ func emitJSON(w io.Writer, accounts []migration.Account, withTOTP, reveal bool) 
 
 // reorderFlags splits `args` into (flag-like tokens, positional tokens) so flags
 // may appear in any order relative to positionals (e.g. `qr foo.png --json` or
-// `code foo.png --issuer MTS`). Value-flags like `--issuer X` consume the next
+// `code foo.png --issuer Acme`). Value-flags like `--issuer X` consume the next
 // token as their value; boolean flags do not. We detect this via the standard
 // library's IsBoolFlag interface so the function stays correct for any future
 // flag we register on `fs`.

@@ -123,14 +123,14 @@ If you only care about pasting the current code into another app (the classic
 
 ```bash
 # one account in the file — no filter needed
-otp-migrate code ~/secrets/mts.png
+otp-migrate code ~/secrets/auth.png
 # 482917
 
 # many accounts — narrow with --issuer (and --name if still ambiguous)
-otp-migrate code ~/secrets/export.png --issuer MTS
+otp-migrate code ~/secrets/export.png --issuer Acme
 
 # straight to the macOS clipboard
-otp-migrate code ~/secrets/mts.png --issuer MTS | pbcopy
+otp-migrate code ~/secrets/auth.png --issuer Acme | pbcopy
 ```
 
 `code` writes a single 6/8-digit line to **stdout** and nothing else, so it
@@ -144,7 +144,7 @@ A handy zsh function for a single, recurring account:
 
 ```bash
 # ~/.zshrc
-mts-otp() { otp-migrate code ~/secrets/mts.png --issuer MTS "$@" ; }
+work-otp() { otp-migrate code ~/secrets/auth.png --issuer Acme "$@" ; }
 ```
 
 ### Multiple QR codes from one export
