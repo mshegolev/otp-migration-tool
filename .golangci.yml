@@ -12,12 +12,20 @@ linters:
     - revive
     - staticcheck
     - unused
+  settings:
+    errcheck:
+      # fmt.Fprint* to os.Stdout/Stderr and file Close in defer return errors
+      # that have no useful recovery path for a CLI tool. Allowlist by name.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintln
+        - fmt.Fprintf
+        - (*os.File).Close
   exclusions:
     paths:
       - internal/migration/pb     # generated protobuf code
       - examples
 
-# In golangci-lint v2 "formatters" are a separate category from linters.
 formatters:
   enable:
     - gofmt
