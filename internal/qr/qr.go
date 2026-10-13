@@ -37,6 +37,26 @@ func Decode(img image.Image) (string, error) {
 		return "", fmt.Errorf("bitmap: %w", err)
 	}
 	result, err := qrcode.NewQRCodeReader().Decode(bmp, nil)
+	// Screenshots may have a dark outer frame and too little quiet zone for
+	// detection. Retry the pure QR reader with progressively trimmed edges.
+	if err != nil {
+		hints := map[gozxing.DecodeHintType]interface{}{gozxing.DecodeHintType_PURE_BARCODE: true}
+		bounds := img.Bounds()
+		limit := bounds.Dx() / 10
+		if bounds.Dy()/10 < limit {
+			limit = bounds.Dy() / 10
+		}
+		for inset := 0; inset <= limit; inset++ {
+			cropped, cropErr := bmp.Crop(inset, inset, bounds.Dx()-2*inset, bounds.Dy()-2*inset)
+			if cropErr != nil {
+				break
+			}
+			fallback, decodeErr := qrcode.NewQRCodeReader().Decode(cropped, hints)
+			if decodeErr == nil {
+				return fallback.GetText(), nil
+			}
+		}
+	}
 	if err != nil {
 		return "", fmt.Errorf("decode QR: %w", err)
 	}
